@@ -34,6 +34,7 @@ public class BatchApplication implements CommandLineRunner{
 		System.out.println("----------------------------------------");
 		
 		//コマンドライン引数を請求年月の検索用に編集
+		
 		StringBuilder commandLineArg = new StringBuilder(args[0]);
 		commandLineArg.insert(4,"-").append("-01").toString();
 
