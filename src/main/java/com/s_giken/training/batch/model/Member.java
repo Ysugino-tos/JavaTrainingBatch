@@ -7,8 +7,8 @@ public class Member {
     private String mail;
     private String name;
     private String address;
-    private LocalDate joinedAt;
-    private LocalDate retiredAt;
+    private LocalDate startDate;
+    private LocalDate endDate;
     private int paymentMethod;
 
     public int getMemberId() {
@@ -35,17 +35,17 @@ public class Member {
     public void setAddress(String address) {
         this.address = address;
     }
-    public LocalDate getJoinedAt() {
-        return joinedAt;
+    public LocalDate getStartDate() {
+        return startDate;
     }
-    public void setJoinedAt(LocalDate joinedAt) {
-        this.joinedAt = joinedAt;
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
     }
-    public LocalDate getRetiredAt() {
-        return retiredAt;
+    public LocalDate getEndDate() {
+        return endDate;
     }
-    public void setRetiredAt(LocalDate retiredAt) {
-        this.retiredAt = retiredAt;
+    public void setEndDate(LocalDate endDate) {
+        this.endDate = endDate;
     }
     public int getPaymentMethod() {
         return paymentMethod;

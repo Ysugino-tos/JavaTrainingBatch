@@ -10,6 +10,7 @@ create table if not exists T_BILLING_DATA(
 billing_ym DATE NOT NULL REFERENCES T_BILLING_STATUS(billing_ym),
 member_id INTEGER NOT NULL,
 mail VARCHAR(256) NOT NULL,
+name VARCHAR(32) NOT NULL,
 address VARCHAR(128) NOT NULL,
 start_date DATE NOT NULL,
 end_date DATE,
