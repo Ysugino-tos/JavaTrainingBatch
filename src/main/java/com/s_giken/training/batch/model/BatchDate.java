@@ -9,11 +9,11 @@ public class BatchDate {
     private LocalDate endTargetDate;
     private String printLogTargetDate;
 
-    public BatchDate(){
-        this.commandLineArg = " ";
+    public BatchDate() {
+        commandLineArg = "";
         startTargetDate = LocalDate.of(2000,01,01);
         endTargetDate = LocalDate.of(2000,01,01);
-        printLogTargetDate = " ";
+        printLogTargetDate = "";
     }
 
     public String getCommandLineArg() {
@@ -28,10 +28,12 @@ public class BatchDate {
     public LocalDate getEndTargetDate() {
         return endTargetDate;
     }
-    public void isBatchDate(String arg){
+    public void parseArg(String arg) {
+        //コマンドライン引数のフォーマット変換
         DateTimeFormatter targetDateTimeFormatter = DateTimeFormatter.BASIC_ISO_DATE;
         DateTimeFormatter printLogTargetDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy"+"年"+"MM"+"月");
         
+        //コマンドライン引数を変換した値を代入
         commandLineArg = arg + "01";
 		startTargetDate = LocalDate.parse(commandLineArg,targetDateTimeFormatter);
 		endTargetDate = LocalDate.parse(commandLineArg,targetDateTimeFormatter).plusMonths(1);
