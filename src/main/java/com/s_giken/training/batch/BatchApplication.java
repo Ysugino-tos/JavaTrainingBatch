@@ -1,6 +1,5 @@
 package com.s_giken.training.batch;
 
-import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.cglib.core.Local;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.rowset.SqlRowSet;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,28 +31,14 @@ public class BatchApplication implements CommandLineRunner{
 
 	@Override
 	public void run(String... args)throws Exception{
-
 		BatchDate batchDate = new BatchDate();
-
-		batchDate = commandLineArgsBuilder(args[0]);
-
+		try{
+			batchDate.isBatchDate(args[0]);
+		}catch(Exception e){
+			logger.error("コマンドライン引数の入力値が不正です。");
+			return;
+		}
 		batchExecute(batchDate);
-	}
-
-
-	//コマンドライン引数を請求年月の検索用に編集するメソッド
-	public BatchDate commandLineArgsBuilder(String args){
-		BatchDate batchDate = new BatchDate();
-		StringBuilder commandLineArg = new StringBuilder(args);
-		commandLineArg.insert(4,"-").append("-01").toString();
-		LocalDate startJoinDate = LocalDate.parse(commandLineArg);
-		LocalDate endJoinDate = LocalDate.parse(commandLineArg).plusMonths(1);
-		
-		batchDate.setCommandLineArg(commandLineArg);
-		batchDate.setStartJoinDate(startJoinDate);
-		batchDate.setEndJoinDate(endJoinDate);
-
-		return batchDate;
 	}
 
 
@@ -65,23 +49,29 @@ public class BatchApplication implements CommandLineRunner{
 		
 		logger.info("----------------------------------------");
 
-		memberList = getMemberData(batchDate.getStartJoinDate(), batchDate.getEndJoinDate());
+		//加入者を抽出するメソッドの呼び出し
+		memberList = getMemberData(batchDate.getStartTargetDate(), batchDate.getEndTargetDate());
 
-		chargeList = getChargeData(batchDate.getStartJoinDate(), batchDate.getEndJoinDate());
-
+		//料金を抽出するメソッドの呼び出し
+		chargeList = getChargeData(batchDate.getStartTargetDate(), batchDate.getEndTargetDate());
+		
+		//料金の合計額を計算するメソッドの呼び出し
 		int sumChargeAmount = addChargeAmount(chargeList);
 
-		//請求データ状況の請求年月がバッチの稼働対象か確認するメソッド
-		isExistBillingData(batchDate.getCommandLineArg());
+		//請求データ状況の請求年月がバッチの稼働対象か確認するメソッドの呼び出し
+		//戻り値が負の場合、バッチを終了させる
+		if(isExistBillingData(batchDate) == false){
+			return;
+		}
 
 		//請求ステータス追加のメソッドの呼び出し
-		addBillingStatus(batchDate.getCommandLineArg());
+		addBillingStatus(batchDate);
 
 		//請求データ追加のメソッド呼び出し
-		addBillingData(memberList, sumChargeAmount, batchDate.getCommandLineArg());
+		addBillingData(memberList, sumChargeAmount, batchDate);
 
 		//請求明細データ追加のメソッドの呼び出し
-		addBillingDeteilData(chargeList, memberList, batchDate.getCommandLineArg());
+		addBillingDeteilData(chargeList, memberList, batchDate);
 
 		//コマンドライン上に処理終了のメッセージ
 		logger.info("----------------------------------------");
@@ -93,8 +83,9 @@ public class BatchApplication implements CommandLineRunner{
 		List<Member> memberList = new ArrayList<>();
 
 		//加入者情報からSQLでデータ抽出
-		SqlRowSet getMemberList= jdbcTemplate.queryForRowSet("SELECT member_id,mail,name,address,start_date,end_date,payment_method from T_MEMBER WHERE start_date < ? and (end_date >= ? or end_date is null)",
-		endJoinDate,startJoinDate);
+		SqlRowSet getMemberList= jdbcTemplate.queryForRowSet
+		("SELECT member_id,mail,name,address,start_date,end_date,payment_method from T_MEMBER " 
+		+ "WHERE start_date < ? and (end_date >= ? or end_date is null)",endJoinDate,startJoinDate);
 
 		//加入者情報から抽出したデータをListに格納
 		while(getMemberList.next()){
@@ -120,8 +111,9 @@ public class BatchApplication implements CommandLineRunner{
 		List<Charge> chargeList = new ArrayList<Charge>();
 
 		//料金情報からSQLでデータ抽出
-		SqlRowSet getChargeList= jdbcTemplate.queryForRowSet("SELECT charge_id,name,amount,start_date,end_date from T_CHARGE WHERE start_date < ? and (end_date >= ? or end_date is null)",
-		endJoinDate,startJoinDate);
+		SqlRowSet getChargeList= jdbcTemplate.queryForRowSet
+		("SELECT charge_id,name,amount,start_date,end_date from T_CHARGE " 
+		+ "WHERE start_date < ? and (end_date >= ? or end_date is null)",endJoinDate,startJoinDate);
 
 		//料金情報から抽出したデータをListに格納
 		while(getChargeList.next()){
@@ -153,41 +145,50 @@ public class BatchApplication implements CommandLineRunner{
 
 
 	//請求データ状況の請求年月がバッチの稼働対象か確認するメソッド
-	public void isExistBillingData(StringBuilder commandLineArg){
-		logger.info(commandLineArg.substring(0, 4) + "年" + commandLineArg.substring(5, 7) + "月分の請求情報を確認しています。");
+	public boolean isExistBillingData(BatchDate batchDate){
+		logger.info(batchDate.getPrintLogTargetDate() + "分の請求情報を確認しています。");
 
 		//請求データ状況の請求年月にコマンドライン引数に入力された年月の確定済みデータが存在するか
 		Integer isExistBillingDate
-		= jdbcTemplate.queryForObject("SELECT COUNT(*) FROM T_BILLING_STATUS WHERE billing_ym = ? AND is_commited = true", Integer.class, commandLineArg);
+		= jdbcTemplate.queryForObject
+		("SELECT COUNT(*) FROM T_BILLING_STATUS WHERE billing_ym = ? AND is_commited = true",
+		 Integer.class, batchDate.getCommandLineArg());
+		 
 		if( isExistBillingDate.equals(1)){
 
 				//請求データ状況の確定が真なのでプログラム終了
 				logger.info("バッチを終了します。");
-				System.exit(0);
+				return false;
 		}else{
 
 			//コマンドライン上に未確定請求削除のメッセージ
-			logger.info("データベースから" + commandLineArg.substring(0, 4) + "年" + commandLineArg.substring(5, 7) + "月分の未確定請求情報を削除しています。");
+			logger.info("データベースから" + batchDate.getPrintLogTargetDate() + "分の未確定請求情報を削除しています。");
 
 			//請求データ状況の確定が偽なので請求データステータスと請求明細データと請求データの対象年月のデータを削除する
-			jdbcTemplate.update("DELETE FROM T_BILLING_DETAIL_DATA WHERE billing_ym = ?" , commandLineArg);
-			jdbcTemplate.update("DELETE FROM T_BILLING_DATA WHERE billing_ym = ?" , commandLineArg);
-			jdbcTemplate.update("DELETE FROM T_BILLING_STATUS WHERE billing_ym = ?" , commandLineArg);
+			jdbcTemplate.update("DELETE FROM T_BILLING_DETAIL_DATA WHERE billing_ym = ?" ,
+			 batchDate.getCommandLineArg());
+			jdbcTemplate.update("DELETE FROM T_BILLING_DATA WHERE billing_ym = ?" ,
+			 batchDate.getCommandLineArg());
+			jdbcTemplate.update("DELETE FROM T_BILLING_STATUS WHERE billing_ym = ?" ,
+			 batchDate.getCommandLineArg());
 
 			//コマンドライン上に削除完了のメッセージ
-			logger.info("削除しました。");	
+			logger.info("削除しました。");
+
+			return true;
 		}
 	}
 
 
 	//請求ステータス追加のメソッド
-	public void addBillingStatus(StringBuilder commandLineArg){
+	public void addBillingStatus(BatchDate batchDate){
 
 		//コマンドライン上に請求ステータス追加のメッセージ
-		logger.info(commandLineArg.substring(0, 4) + "年" + commandLineArg.substring(5, 7) + "月分の請求ステータスを追加しています。");
+		logger.info(batchDate.getPrintLogTargetDate() + "分の請求ステータスを追加しています。");
 
 		//請求ステータスにコマンドライン引数に入力された年月のデータを新規作成する
-		int countCreateBillingStatus = jdbcTemplate.update("INSERT INTO T_BILLING_STATUS(billing_ym,is_commited) VALUES (?,false)" , commandLineArg);
+		int countCreateBillingStatus = jdbcTemplate.update
+		("INSERT INTO T_BILLING_STATUS(billing_ym,is_commited) VALUES (?,false)" , batchDate.getCommandLineArg());
 
 		//コマンドライン上に請求ステータス追加完了のメッセージ
 		logger.info(countCreateBillingStatus + "件追加しました。");
@@ -195,15 +196,19 @@ public class BatchApplication implements CommandLineRunner{
 
 
 	//請求データ追加のメソッド
-	public void addBillingData(List<Member> memberList, int sumChargeAmount, StringBuilder commandLineArg){
+	public void addBillingData(List<Member> memberList, int sumChargeAmount, BatchDate batchDate){
 		//コマンドライン上に請求データ追加のメッセージ
-		logger.info(commandLineArg.substring(0, 4) + "年" + commandLineArg.substring(5, 7) + "月分の請求データを追加しています。");
+		logger.info(batchDate.getPrintLogTargetDate() + "分の請求データを追加しています。");
 
 		//各加入者情報をfor文で取り出す
 		for(Member member : memberList){
 			//請求データにコマンドライン引数に入力された年月のデータを新規作成する
-			jdbcTemplate.update("INSERT INTO T_BILLING_DATA(billing_ym,member_id,mail,name,address,start_date,end_date,payment_method,amount,tax_ratio,total)VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-			commandLineArg, member.getMemberId(), member.getMail(),member.getName(),member.getAddress(),member.getStartDate(),member.getEndDate(),member.getPaymentMethod(),sumChargeAmount,0.1,(sumChargeAmount * 1.1));
+			jdbcTemplate.update
+			("INSERT INTO T_BILLING_DATA"
+			+ "(billing_ym,member_id,mail,name,address,start_date,end_date,payment_method,amount,tax_ratio,total)" 
+			+ "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+			batchDate.getCommandLineArg(), member.getMemberId(), member.getMail(),member.getName(),member.getAddress(),
+			member.getStartDate(),member.getEndDate(),member.getPaymentMethod(),sumChargeAmount,0.1,(sumChargeAmount * 1.1));
 		}
 		//コマンドライン上に請求データ追加完了のメッセージ
 		logger.info(memberList.size() + "件追加しました。");
@@ -211,16 +216,19 @@ public class BatchApplication implements CommandLineRunner{
 
 
 	//請求明細データ追加のメソッド
-	public void addBillingDeteilData(List<Charge> chargeList, List<Member> memberList, StringBuilder commandLineArg){
+	public void addBillingDeteilData(List<Charge> chargeList, List<Member> memberList, BatchDate batchDate){
 		//コマンドライン上に請求明細データ追加のメッセージ
-		logger.info(commandLineArg.substring(0, 4) + "年" + commandLineArg.substring(5, 7) + "月分の請求明細データを追加しています。");
+		logger.info(batchDate.getPrintLogTargetDate() + "分の請求明細データを追加しています。");
 
 		//各料金情報をfor文で取り出す
 		for(Charge charge : chargeList){
 			for(Member member : memberList){
 				//請求明細データにコマンドライン引数に入力された年月のデータを新規作成する
-				jdbcTemplate.update("INSERT INTO T_BILLING_DETAIL_DATA(billing_ym,member_id,charge_id,name,amount,start_date,end_date)VALUES(?,?,?,?,?,?,?)",
-				commandLineArg,member.getMemberId(),charge.getChargeId(),charge.getName(),charge.getAmount(),charge.getStartDate(),charge.getEndDate());
+				jdbcTemplate.update
+				("INSERT INTO T_BILLING_DETAIL_DATA" 
+				+ "(billing_ym,member_id,charge_id,name,amount,start_date,end_date)VALUES(?,?,?,?,?,?,?)",
+				batchDate.getCommandLineArg(),member.getMemberId(),charge.getChargeId(),charge.getName(),charge.getAmount(),
+				charge.getStartDate(),charge.getEndDate());
 			}
 		}
 		//コマンドライン上に請求明細データ追加完了のメッセージ
