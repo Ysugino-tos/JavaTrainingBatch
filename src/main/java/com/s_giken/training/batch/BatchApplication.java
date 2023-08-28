@@ -98,7 +98,12 @@ public class BatchApplication implements CommandLineRunner {
 			member.setName(getMemberList.getString("name"));
 			member.setAddress(getMemberList.getString("address"));
 			member.setStartDate(getMemberList.getDate("start_date").toLocalDate());
-			member.setEndDate(getMemberList.getDate("end_date").toLocalDate());
+			try {
+				member.setEndDate(getMemberList.getDate("end_date").toLocalDate());
+			}catch(java.lang.NullPointerException e) {
+				member.setEndDate(null);
+			}
+			
 			member.setPaymentMethod(getMemberList.getInt("payment_method"));
 
 			memberList.add(member);
@@ -129,7 +134,12 @@ public class BatchApplication implements CommandLineRunner {
 			charge.setName(getChargeList.getString("name"));
 			charge.setAmount(getChargeList.getInt("amount"));
 			charge.setStartDate(getChargeList.getDate("start_date").toLocalDate());
-			charge.setEndDate(getChargeList.getDate("end_date").toLocalDate());
+			try {
+				charge.setEndDate(getChargeList.getDate("end_date").toLocalDate());
+			}catch(java.lang.NullPointerException e) {
+				charge.setEndDate(null);
+			}
+			
 
 			chargeList.add(charge);
 		}
