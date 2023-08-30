@@ -169,7 +169,7 @@ public class BatchApplication implements CommandLineRunner {
 		);
 		 
 		if( isExistBillingDate.equals(1)) {
-				logger.info("バッチを終了します。");
+				logger.info("バッチの請求ステータスが確定済みのため、バッチを終了します。");
 				return true;
 		}else {
 			logger.info("データベースから" + batchDate.getPrintLogTargetDate() + "分の未確定請求情報を削除しています。");
